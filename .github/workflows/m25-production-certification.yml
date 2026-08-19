@@ -67,6 +67,20 @@ jobs:
           pnpm install --frozen-lockfile
 
       # ==================================================
+      # PLAYWRIGHT BROWSERS
+      # ==================================================
+
+      - name: Install Playwright browsers
+        run: |
+          set -eu
+
+          pnpm --filter nevo-builder-frontend exec playwright install \
+            --with-deps \
+            chromium firefox
+
+          echo "Playwright browsers: PASS"
+
+      # ==================================================
       # WORKSPACE PACKAGE BUILD
       # ==================================================
 
