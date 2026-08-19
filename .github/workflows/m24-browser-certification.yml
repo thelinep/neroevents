@@ -44,6 +44,16 @@ jobs:
           --health-timeout 5s
           --health-retries 20
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     env:
       DATABASE_URL: postgresql://nevo:nevo@localhost:5432/nevo_test
       PORT: 3000
@@ -51,8 +61,16 @@ jobs:
       REDIS_URL: redis://localhost:6379
 
     steps:
+      # --------------------------------------------------
+      # Source
+      # --------------------------------------------------
+
       - name: Checkout
         uses: actions/checkout@v6
+
+      # --------------------------------------------------
+      # Runtime
+      # --------------------------------------------------
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -67,6 +85,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # --------------------------------------------------
+      # Infrastructure
+      # --------------------------------------------------
+
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
@@ -74,6 +96,8 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
+          set -e
+
           for i in {1..30}; do
             if pg_isready \
               -h 127.0.0.1 \
@@ -92,26 +116,41 @@ jobs:
           echo "PostgreSQL failed to become ready"
           exit 1
 
-      - name: Run database migrations
+      - name: Verify Redis
         run: |
-          set -euo pipefail
+          set -e
 
-          for migration in packages/database/migrations/*.sql; do
-            echo "========================================"
-            echo "Applying migration: ${migration}"
-            echo "========================================"
+          for i in {1..30}; do
+            if redis-cli \
+              -h 127.0.0.1 \
+              -p 6379 \
+              ping | grep -q PONG
+            then
+              echo "Redis ready"
+              exit 0
+            fi
 
-            psql \
-              "${DATABASE_URL}" \
-              -v ON_ERROR_STOP=1 \
-              -f "${migration}"
+            echo "Waiting for Redis..."
+            sleep 2
           done
 
-      - name: Verify database schema
-        run: |
-          psql "${DATABASE_URL}" \
-            -v ON_ERROR_STOP=1 \
-            -c '\dt'
+          echo "Redis failed to become ready"
+          exit 1
+
+      # --------------------------------------------------
+      # API
+      #
+      # IMPORTANT:
+      # Migrations are NOT executed here.
+      #
+      # apps/api/src/index.ts owns startup:
+      #
+      #   runMigrations()
+      #   orchestrator.initialize()
+      #   app.listen()
+      #
+      # This prevents migrations from being applied twice.
+      # --------------------------------------------------
 
       - name: Start API
         run: |
@@ -125,7 +164,9 @@ jobs:
           set -e
 
           for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:3000/ready; then
+            if curl -fsS \
+              http://127.0.0.1:3000/ready
+            then
               echo
               echo "API ready"
               exit 0
@@ -139,31 +180,53 @@ jobs:
           echo "API failed to become ready"
           echo "========================================"
 
+          echo
+          echo "--- API log ---"
           cat /tmp/nevo-api.log || true
 
           exit 1
 
       - name: Verify API health
         run: |
-          curl -fsS http://127.0.0.1:3000/health
+          curl -fsS \
+            http://127.0.0.1:3000/health
+
           echo
+
+      # --------------------------------------------------
+      # Frontend
+      # --------------------------------------------------
+
+      - name: Build frontend
+        run: |
+          pnpm --filter nevo-builder-frontend build
+
+      # --------------------------------------------------
+      # Playwright
+      # --------------------------------------------------
 
       - name: Install Playwright browser
         run: |
           pnpm exec playwright install --with-deps \
             ${{ matrix.browser }}
 
-      - name: Build frontend
+      - name: List Playwright tests
         run: |
-          pnpm --filter nevo-builder-frontend build
+          pnpm --filter nevo-builder-frontend exec playwright test \
+            --list \
+            --project=${{ matrix.browser }}
 
       - name: Run Playwright — ${{ matrix.browser }}
         run: |
           pnpm --filter nevo-builder-frontend exec playwright test \
             --project=${{ matrix.browser }}
 
+      # --------------------------------------------------
+      # Certification artifacts
+      # --------------------------------------------------
+
       - name: Upload API log
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
           name: m24-api-log-${{ matrix.browser }}
@@ -172,7 +235,7 @@ jobs:
           retention-days: 30
 
       - name: Upload Playwright report
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
           name: m24-playwright-${{ matrix.browser }}
@@ -181,13 +244,17 @@ jobs:
           retention-days: 30
 
       - name: Upload test results
-        if: ${{ !cancelled() }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
           name: m24-test-results-${{ matrix.browser }}
           path: apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 30
+
+      # --------------------------------------------------
+      # Cleanup
+      # --------------------------------------------------
 
       - name: Stop API
         if: always()
