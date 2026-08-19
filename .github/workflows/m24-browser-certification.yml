@@ -21,7 +21,15 @@ jobs:
   playwright:
     name: Playwright — ${{ matrix.browser }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+
+    # Official Playwright image:
+    # - browsers already installed
+    # - Linux browser dependencies already installed
+    # - avoids the very expensive `playwright install --with-deps`
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
 
     strategy:
       fail-fast: false
@@ -38,8 +46,6 @@ jobs:
           POSTGRES_USER: nevo
           POSTGRES_PASSWORD: nevo
           POSTGRES_DB: nevo_test
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U nevo -d nevo_test"
           --health-interval 5s
@@ -48,8 +54,6 @@ jobs:
 
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -57,12 +61,15 @@ jobs:
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql://nevo:nevo@127.0.0.1:5432/nevo_test
+      # Service containers are addressed by their labels
+      # from inside the Playwright job container.
+      DATABASE_URL: postgresql://nevo:nevo@postgres:5432/nevo_test
       PORT: 3000
       HOST: 0.0.0.0
-      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_URL: redis://redis:6379
 
     steps:
+
       # ==================================================
       # SOURCE
       # ==================================================
@@ -89,7 +96,7 @@ jobs:
 
       - name: Verify runtime
         run: |
-          set -euo pipefail
+          set -eu
 
           echo "Node:"
           node --version
@@ -102,99 +109,143 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -eu
           pnpm install --frozen-lockfile
 
       # ==================================================
-      # DATABASE CLIENTS
+      # SERVICE CONNECTIVITY
       # ==================================================
 
-      - name: Install database clients
+      - name: Verify PostgreSQL service
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            postgresql-client \
-            redis-tools
+          set -eu
 
-      # ==================================================
-      # POSTGRESQL
-      # ==================================================
+          node <<'NODE'
+          const net = require('node:net');
 
-      - name: Wait for PostgreSQL
+          async function waitFor(host, port, label) {
+            const sleep = (ms) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
+
+            function connect() {
+              return new Promise((resolve, reject) => {
+                const socket = net.createConnection({ host, port });
+
+                const timer = setTimeout(() => {
+                  socket.destroy();
+                  reject(new Error(`${label} timeout`));
+                }, 5000);
+
+                socket.once('connect', () => {
+                  clearTimeout(timer);
+                  socket.end();
+                  resolve();
+                });
+
+                socket.once('error', (error) => {
+                  clearTimeout(timer);
+                  socket.destroy();
+                  reject(error);
+                });
+              });
+            }
+
+            for (let attempt = 1; attempt <= 30; attempt++) {
+              try {
+                await connect();
+
+                console.log(`${label} TCP connection ready`);
+                return;
+              } catch (error) {
+                console.log(
+                  `Waiting for ${label}... attempt ${attempt}/30`
+                );
+
+                if (attempt === 30) {
+                  throw error;
+                }
+
+                await sleep(2000);
+              }
+            }
+          }
+
+          await waitFor('postgres', 5432, 'PostgreSQL');
+          NODE
+
+      - name: Verify Redis service
         run: |
-          set -euo pipefail
+          set -eu
 
-          for i in {1..30}; do
-            if pg_isready \
-              -h 127.0.0.1 \
-              -p 5432 \
-              -U nevo \
-              -d nevo_test
-            then
-              echo "PostgreSQL ready"
-              exit 0
-            fi
+          node <<'NODE'
+          const net = require('node:net');
 
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-          done
+          async function waitFor(host, port, label) {
+            const sleep = (ms) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
 
-          echo "========================================"
-          echo "PostgreSQL failed to become ready"
-          echo "========================================"
+            function connect() {
+              return new Promise((resolve, reject) => {
+                const socket = net.createConnection({ host, port });
 
-          exit 1
+                const timer = setTimeout(() => {
+                  socket.destroy();
+                  reject(new Error(`${label} timeout`));
+                }, 5000);
 
-      - name: Verify PostgreSQL connection
-        run: |
-          set -euo pipefail
+                socket.once('connect', () => {
+                  clearTimeout(timer);
+                  socket.end();
+                  resolve();
+                });
 
-          psql "$DATABASE_URL" \
-            -v ON_ERROR_STOP=1 \
-            -c "SELECT version();"
+                socket.once('error', (error) => {
+                  clearTimeout(timer);
+                  socket.destroy();
+                  reject(error);
+                });
+              });
+            }
 
-      # ==================================================
-      # REDIS
-      # ==================================================
+            for (let attempt = 1; attempt <= 30; attempt++) {
+              try {
+                await connect();
 
-      - name: Wait for Redis
-        run: |
-          set -euo pipefail
+                console.log(`${label} TCP connection ready`);
+                return;
+              } catch (error) {
+                console.log(
+                  `Waiting for ${label}... attempt ${attempt}/30`
+                );
 
-          for i in {1..30}; do
-            if redis-cli \
-              -h 127.0.0.1 \
-              -p 6379 \
-              ping | grep -q '^PONG$'
-            then
-              echo "Redis ready"
-              exit 0
-            fi
+                if (attempt === 30) {
+                  throw error;
+                }
 
-            echo "Waiting for Redis..."
-            sleep 2
-          done
+                await sleep(2000);
+              }
+            }
+          }
 
-          echo "========================================"
-          echo "Redis failed to become ready"
-          echo "========================================"
-
-          exit 1
+          await waitFor('redis', 6379, 'Redis');
+          NODE
 
       # ==================================================
       # API
       #
-      # IMPORTANT:
+      # API owns migration execution.
       #
-      # The API owns migration execution.
+      # apps/api/src/index.ts:
+      #   runMigrations()
+      #   orchestrator.initialize()
+      #   app.listen()
       #
-      # Do NOT run psql against packages/database/migrations
-      # here. apps/api/src/index.ts calls runMigrations()
-      # before app.listen().
+      # Do NOT run migration SQL separately here.
       # ==================================================
 
       - name: Start API
         run: |
-          set -euo pipefail
+          set -eu
 
           pnpm --filter nevo-builder-backend dev \
             > /tmp/nevo-api.log 2>&1 &
@@ -206,10 +257,13 @@ jobs:
 
       - name: Wait for API readiness
         run: |
-          set -euo pipefail
+          set -eu
 
-          for i in {1..60}; do
-            if curl --fail --silent --show-error \
+          for i in $(seq 1 60); do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
               http://127.0.0.1:3000/ready
             then
               echo
@@ -228,21 +282,26 @@ jobs:
 
           echo
           echo "--- API process ---"
+
           ps aux | grep -E \
             '[t]sx src/index.ts|[n]evo-builder-backend' \
             || true
 
           echo
           echo "--- API log ---"
+
           cat /tmp/nevo-api.log || true
 
           exit 1
 
       - name: Verify API health
         run: |
-          set -euo pipefail
+          set -eu
 
-          curl --fail --silent --show-error \
+          curl \
+            --fail \
+            --silent \
+            --show-error \
             http://127.0.0.1:3000/health
 
           echo
@@ -250,9 +309,12 @@ jobs:
 
       - name: Verify API readiness
         run: |
-          set -euo pipefail
+          set -eu
 
-          curl --fail --silent --show-error \
+          curl \
+            --fail \
+            --silent \
+            --show-error \
             http://127.0.0.1:3000/ready
 
           echo
@@ -264,38 +326,45 @@ jobs:
 
       - name: Build frontend
         run: |
-          set -euo pipefail
+          set -eu
 
           pnpm --filter nevo-builder-frontend build
 
       - name: Verify frontend build output
         run: |
-          set -euo pipefail
+          set -eu
 
           test -f apps/web/dist/index.html
 
           echo "Frontend production build verified:"
           du -sh apps/web/dist
-          find apps/web/dist -maxdepth 2 -type f | sort
+
+          find apps/web/dist \
+            -maxdepth 2 \
+            -type f \
+            | sort
 
       # ==================================================
       # PLAYWRIGHT
       # ==================================================
 
-      - name: Install Playwright browser
-        run: |
-          set -euo pipefail
+      # Browsers are already installed in the official
+      # Playwright container.
+      #
+      # DO NOT run:
+      # playwright install --with-deps
+      #
+      # That was the 20–30 minute CI bottleneck.
 
-          pnpm exec playwright install --with-deps \
-            "${{ matrix.browser }}"
-
-      - name: Verify Playwright browser
+      - name: Verify Playwright
         run: |
+          set -eu
+
           pnpm exec playwright --version
 
       - name: List Playwright tests
         run: |
-          set -euo pipefail
+          set -eu
 
           pnpm --filter nevo-builder-frontend exec playwright test \
             --list \
@@ -303,7 +372,7 @@ jobs:
 
       - name: Run Playwright — ${{ matrix.browser }}
         run: |
-          set -euo pipefail
+          set -eu
 
           pnpm --filter nevo-builder-frontend exec playwright test \
             --project="${{ matrix.browser }}"
