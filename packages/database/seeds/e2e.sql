@@ -1,0 +1,3 @@
+-- E2E database seed. Identity tests should create users through
+-- POST /api/auth/register so password policy and hashing are exercised.
+-- This file intentionally contains no credentials.

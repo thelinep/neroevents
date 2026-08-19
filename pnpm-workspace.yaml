@@ -1,0 +1,22 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  bcrypt: true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+minimumReleaseAgeExclude:
+  - '@testing-library/user-event@14.6.5'
+  - '@vitest/coverage-v8@4.1.11'
+  - '@vitest/expect@4.1.11'
+  - '@vitest/mocker@4.1.11'
+  - '@vitest/pretty-format@4.1.11'
+  - '@vitest/runner@4.1.11'
+  - '@vitest/snapshot@4.1.11'
+  - '@vitest/spy@4.1.11'
+  - '@vitest/utils@4.1.11'
+  - fastify@5.12.1
+  - lucide-react@1.32.0
+  - uuid@14.0.2
+  - vitest@4.1.11

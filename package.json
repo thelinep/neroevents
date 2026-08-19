@@ -1,0 +1,30 @@
+{
+  "name": "nevo-platform",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "pnpm install",
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:api": "pnpm --filter nevo-builder-backend dev",
+    "dev:web": "pnpm --filter nevo-builder-frontend dev",
+    "build": "pnpm --parallel --filter './apps/*' build",
+    "build:api": "pnpm --filter nevo-builder-backend build",
+    "build:web": "pnpm --filter nevo-builder-frontend build",
+    "test": "pnpm --parallel --filter './apps/*' test",
+    "test:api": "pnpm --filter nevo-builder-backend test",
+    "test:web": "pnpm --filter nevo-builder-frontend test",
+"test:e2e": "pnpm --filter nevo-builder-frontend test:e2e",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "clean": "rm -rf apps/api/dist apps/web/dist node_modules"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "concurrently": "^10.0.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
