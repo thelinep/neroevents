@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - master
+
   pull_request:
     branches:
       - main
       - master
+
   workflow_dispatch:
 
 concurrency:
@@ -55,48 +57,62 @@ jobs:
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql://nevo:nevo@localhost:5432/nevo_test
+      DATABASE_URL: postgresql://nevo:nevo@127.0.0.1:5432/nevo_test
       PORT: 3000
       HOST: 0.0.0.0
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://127.0.0.1:6379
 
     steps:
-      # --------------------------------------------------
-      # Source
-      # --------------------------------------------------
+      # ==================================================
+      # SOURCE
+      # ==================================================
 
       - name: Checkout
         uses: actions/checkout@v6
 
-      # --------------------------------------------------
-      # Runtime
-      # --------------------------------------------------
+      # ==================================================
+      # RUNTIME
+      # ==================================================
 
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 11.21.0
 
+      - name: Verify runtime
+        run: |
+          node --version
+          pnpm --version
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
 
-      # --------------------------------------------------
-      # Infrastructure
-      # --------------------------------------------------
+      # ==================================================
+      # DATABASE CLIENTS
+      # ==================================================
 
-      - name: Install PostgreSQL client
+      - name: Install database clients
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y \
+            postgresql-client \
+            redis-tools
+
+      # ==================================================
+      # POSTGRESQL
+      # ==================================================
 
       - name: Wait for PostgreSQL
         run: |
-          set -e
+          set -euo pipefail
 
           for i in {1..30}; do
             if pg_isready \
@@ -113,18 +129,33 @@ jobs:
             sleep 2
           done
 
+          echo "========================================"
           echo "PostgreSQL failed to become ready"
+          echo "========================================"
+
           exit 1
 
-      - name: Verify Redis
+      - name: Verify PostgreSQL connection
         run: |
-          set -e
+          set -euo pipefail
+
+          psql "$DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT version();"
+
+      # ==================================================
+      # REDIS
+      # ==================================================
+
+      - name: Wait for Redis
+        run: |
+          set -euo pipefail
 
           for i in {1..30}; do
             if redis-cli \
               -h 127.0.0.1 \
               -p 6379 \
-              ping | grep -q PONG
+              ping | grep -q '^PONG$'
             then
               echo "Redis ready"
               exit 0
@@ -134,37 +165,42 @@ jobs:
             sleep 2
           done
 
+          echo "========================================"
           echo "Redis failed to become ready"
+          echo "========================================"
+
           exit 1
 
-      # --------------------------------------------------
+      # ==================================================
       # API
       #
       # IMPORTANT:
-      # Migrations are NOT executed here.
       #
-      # apps/api/src/index.ts owns startup:
+      # The API owns migration execution.
       #
-      #   runMigrations()
-      #   orchestrator.initialize()
-      #   app.listen()
-      #
-      # This prevents migrations from being applied twice.
-      # --------------------------------------------------
+      # Do NOT run psql against packages/database/migrations
+      # here. apps/api/src/index.ts calls runMigrations()
+      # before app.listen().
+      # ==================================================
 
       - name: Start API
         run: |
+          set -euo pipefail
+
           pnpm --filter nevo-builder-backend dev \
             > /tmp/nevo-api.log 2>&1 &
 
           echo $! > /tmp/nevo-api.pid
 
+          echo "API process started:"
+          cat /tmp/nevo-api.pid
+
       - name: Wait for API readiness
         run: |
-          set -e
+          set -euo pipefail
 
           for i in {1..60}; do
-            if curl -fsS \
+            if curl --fail --silent --show-error \
               http://127.0.0.1:3000/ready
             then
               echo
@@ -172,13 +208,20 @@ jobs:
               exit 0
             fi
 
-            echo "Waiting for API..."
+            echo "Waiting for API... attempt ${i}/60"
             sleep 2
           done
 
+          echo
           echo "========================================"
           echo "API failed to become ready"
           echo "========================================"
+
+          echo
+          echo "--- API process ---"
+          ps aux | grep -E \
+            '[t]sx src/index.ts|[n]evo-builder-backend' \
+            || true
 
           echo
           echo "--- API log ---"
@@ -188,42 +231,77 @@ jobs:
 
       - name: Verify API health
         run: |
-          curl -fsS \
+          set -euo pipefail
+
+          curl --fail --silent --show-error \
             http://127.0.0.1:3000/health
 
           echo
+          echo "API health OK"
 
-      # --------------------------------------------------
-      # Frontend
-      # --------------------------------------------------
+      - name: Verify API readiness
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error \
+            http://127.0.0.1:3000/ready
+
+          echo
+          echo "API readiness OK"
+
+      # ==================================================
+      # FRONTEND PRODUCTION BUILD
+      # ==================================================
 
       - name: Build frontend
         run: |
+          set -euo pipefail
+
           pnpm --filter nevo-builder-frontend build
 
-      # --------------------------------------------------
-      # Playwright
-      # --------------------------------------------------
+      - name: Verify frontend build output
+        run: |
+          set -euo pipefail
+
+          test -f apps/web/dist/index.html
+
+          echo "Frontend production build verified:"
+          du -sh apps/web/dist
+          find apps/web/dist -maxdepth 2 -type f | sort
+
+      # ==================================================
+      # PLAYWRIGHT
+      # ==================================================
 
       - name: Install Playwright browser
         run: |
+          set -euo pipefail
+
           pnpm exec playwright install --with-deps \
-            ${{ matrix.browser }}
+            "${{ matrix.browser }}"
+
+      - name: Verify Playwright browser
+        run: |
+          pnpm exec playwright --version
 
       - name: List Playwright tests
         run: |
+          set -euo pipefail
+
           pnpm --filter nevo-builder-frontend exec playwright test \
             --list \
-            --project=${{ matrix.browser }}
+            --project="${{ matrix.browser }}"
 
       - name: Run Playwright — ${{ matrix.browser }}
         run: |
-          pnpm --filter nevo-builder-frontend exec playwright test \
-            --project=${{ matrix.browser }}
+          set -euo pipefail
 
-      # --------------------------------------------------
-      # Certification artifacts
-      # --------------------------------------------------
+          pnpm --filter nevo-builder-frontend exec playwright test \
+            --project="${{ matrix.browser }}"
+
+      # ==================================================
+      # CERTIFICATION ARTIFACTS
+      # ==================================================
 
       - name: Upload API log
         if: ${{ always() }}
@@ -243,7 +321,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Upload test results
+      - name: Upload Playwright test results
         if: ${{ always() }}
         uses: actions/upload-artifact@v5
         with:
@@ -252,13 +330,32 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      # --------------------------------------------------
-      # Cleanup
-      # --------------------------------------------------
+      - name: Upload frontend production build
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: m24-frontend-dist-${{ matrix.browser }}
+          path: apps/web/dist/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # ==================================================
+      # CLEANUP
+      # ==================================================
 
       - name: Stop API
-        if: always()
+        if: ${{ always() }}
         run: |
           if [ -f /tmp/nevo-api.pid ]; then
-            kill "$(cat /tmp/nevo-api.pid)" || true
+            PID="$(cat /tmp/nevo-api.pid)"
+
+            if kill -0 "$PID" 2>/dev/null; then
+              kill "$PID" || true
+            fi
+
+            sleep 2
+
+            if kill -0 "$PID" 2>/dev/null; then
+              kill -9 "$PID" || true
+            fi
           fi
