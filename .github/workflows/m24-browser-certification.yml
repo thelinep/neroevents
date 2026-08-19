@@ -23,10 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    # Official Playwright image:
-    # - browsers already installed
-    # - Linux browser dependencies already installed
-    # - avoids the very expensive `playwright install --with-deps`
+    # Official Playwright image.
+    # Browser binaries and Linux browser dependencies
+    # are already installed.
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --ipc=host
@@ -61,8 +60,6 @@ jobs:
           --health-retries 20
 
     env:
-      # Service containers are addressed by their labels
-      # from inside the Playwright job container.
       DATABASE_URL: postgresql://nevo:nevo@postgres:5432/nevo_test
       PORT: 3000
       HOST: 0.0.0.0
@@ -98,156 +95,38 @@ jobs:
         run: |
           set -eu
 
-          echo "Node:"
-          node --version
-
-          echo "npm:"
-          npm --version
-
-          echo "pnpm:"
-          pnpm --version
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          echo "pnpm: $(pnpm --version)"
 
       - name: Install dependencies
         run: |
           set -eu
+
           pnpm install --frozen-lockfile
 
       # ==================================================
-      # SERVICE CONNECTIVITY
+      # BACKEND BUILD
       # ==================================================
 
-      - name: Verify PostgreSQL service
+      - name: Build backend
         run: |
           set -eu
 
-          node <<'NODE'
-          const net = require('node:net');
-
-          async function waitFor(host, port, label) {
-            const sleep = (ms) =>
-              new Promise((resolve) => setTimeout(resolve, ms));
-
-            function connect() {
-              return new Promise((resolve, reject) => {
-                const socket = net.createConnection({ host, port });
-
-                const timer = setTimeout(() => {
-                  socket.destroy();
-                  reject(new Error(`${label} timeout`));
-                }, 5000);
-
-                socket.once('connect', () => {
-                  clearTimeout(timer);
-                  socket.end();
-                  resolve();
-                });
-
-                socket.once('error', (error) => {
-                  clearTimeout(timer);
-                  socket.destroy();
-                  reject(error);
-                });
-              });
-            }
-
-            for (let attempt = 1; attempt <= 30; attempt++) {
-              try {
-                await connect();
-
-                console.log(`${label} TCP connection ready`);
-                return;
-              } catch (error) {
-                console.log(
-                  `Waiting for ${label}... attempt ${attempt}/30`
-                );
-
-                if (attempt === 30) {
-                  throw error;
-                }
-
-                await sleep(2000);
-              }
-            }
-          }
-
-          await waitFor('postgres', 5432, 'PostgreSQL');
-          NODE
-
-      - name: Verify Redis service
-        run: |
-          set -eu
-
-          node <<'NODE'
-          const net = require('node:net');
-
-          async function waitFor(host, port, label) {
-            const sleep = (ms) =>
-              new Promise((resolve) => setTimeout(resolve, ms));
-
-            function connect() {
-              return new Promise((resolve, reject) => {
-                const socket = net.createConnection({ host, port });
-
-                const timer = setTimeout(() => {
-                  socket.destroy();
-                  reject(new Error(`${label} timeout`));
-                }, 5000);
-
-                socket.once('connect', () => {
-                  clearTimeout(timer);
-                  socket.end();
-                  resolve();
-                });
-
-                socket.once('error', (error) => {
-                  clearTimeout(timer);
-                  socket.destroy();
-                  reject(error);
-                });
-              });
-            }
-
-            for (let attempt = 1; attempt <= 30; attempt++) {
-              try {
-                await connect();
-
-                console.log(`${label} TCP connection ready`);
-                return;
-              } catch (error) {
-                console.log(
-                  `Waiting for ${label}... attempt ${attempt}/30`
-                );
-
-                if (attempt === 30) {
-                  throw error;
-                }
-
-                await sleep(2000);
-              }
-            }
-          }
-
-          await waitFor('redis', 6379, 'Redis');
-          NODE
+          pnpm --filter nevo-builder-backend build
 
       # ==================================================
       # API
       #
-      # API owns migration execution.
-      #
-      # apps/api/src/index.ts:
-      #   runMigrations()
-      #   orchestrator.initialize()
-      #   app.listen()
-      #
-      # Do NOT run migration SQL separately here.
+      # The API startup is responsible for migrations.
+      # /ready therefore gates both migrations and startup.
       # ==================================================
 
       - name: Start API
         run: |
           set -eu
 
-          pnpm --filter nevo-builder-backend dev \
+          pnpm --filter nevo-builder-backend start \
             > /tmp/nevo-api.log 2>&1 &
 
           echo $! > /tmp/nevo-api.pid
@@ -346,15 +225,13 @@ jobs:
 
       # ==================================================
       # PLAYWRIGHT
-      # ==================================================
-
-      # Browsers are already installed in the official
-      # Playwright container.
+      #
+      # Browser binaries are already present in the
+      # official Playwright container.
       #
       # DO NOT run:
       # playwright install --with-deps
-      #
-      # That was the 20–30 minute CI bottleneck.
+      # ==================================================
 
       - name: Verify Playwright
         run: |
