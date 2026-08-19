@@ -265,12 +265,16 @@ jobs:
             --project="${{ matrix.browser }}"
 
       - name: Run Playwright — ${{ matrix.browser }}
+        env:
+          HOME: /root
         run: |
           set -eu
 
+          echo "HOME=${HOME}"
+          echo "Browser=${{ matrix.browser }}"
+
           pnpm --filter nevo-builder-frontend exec playwright test \
             --project="${{ matrix.browser }}"
-
       # ==================================================
       # CERTIFICATION ARTIFACTS
       # ==================================================
