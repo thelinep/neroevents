@@ -2,7 +2,8 @@ import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import multipart from '@fastify/multipart';
 import { v4 as uuidv4 } from 'uuid';
-
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
 import { orchestrator } from './orchestrator.js';
 import { pool } from './db/client.js';
 import authPlugin from './plugins/auth.js';
@@ -13,6 +14,10 @@ import agentsRoutes from './routes/agents.js';
 export function buildApp() {
   const app = Fastify({ logger: true });
 
+ app.register(fastifyStatic, {
+    root: path.resolve(process.cwd(), '../web/dist'),
+    prefix: '/',
+  });
   app.setErrorHandler((error, _request, reply) => {
     const details = error as {
       statusCode?: number;
@@ -83,6 +88,22 @@ export function buildApp() {
     }
   });
 
+  app.setNotFoundHandler((request, reply) => {
+    if (
+      request.method === 'GET' &&
+      !request.url.startsWith('/api/') &&
+      !request.url.startsWith('/ws') &&
+      !request.url.startsWith('/health') &&
+      !request.url.startsWith('/ready') &&
+      !request.url.startsWith('/assets/')
+    ) {
+      return reply.sendFile('index.html');
+    }
+
+    return reply.status(404).send({
+      error: 'Not found',
+    });
+  });
 
   return app;
 }

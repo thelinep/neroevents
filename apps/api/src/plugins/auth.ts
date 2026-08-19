@@ -1,28 +1,31 @@
 import fp from 'fastify-plugin';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
+
 import { AuthService } from '../modules/auth/services/auth.service.js';
 import { pool } from '../db/client.js';
 import { config } from '../config.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
-  user?: {
-    id: string;
-    email: string;
-    displayName: string | null;
-  };
-}
-  interface FastifyInstance { authService: AuthService; }
+    user?: {
+      id: string;
+      email: string;
+      displayName: string | null;
+    };
+  }
+
+  interface FastifyInstance {
+    authService: AuthService;
+  }
 }
 
 export default fp(async (app: FastifyInstance) => {
   const service = new AuthService(
     pool,
-    config.sessionExpiryDays
+    config.sessionExpiryDays,
   );
 
   app.decorate('authService', service);
-
   app.decorateRequest('user');
 
   app.addHook('preHandler', async (request, reply) => {
@@ -34,20 +37,35 @@ export default fp(async (app: FastifyInstance) => {
       '/ready',
     ];
 
+    // Public API endpoints.
     if (
       publicPaths.some(
         (path) =>
           request.url === path ||
-          request.url.startsWith(`${path}?`)
+          request.url.startsWith(`${path}?`),
       )
     ) {
       return;
     }
 
+    // WebSocket handles its own connection lifecycle.
     if (request.url === '/ws') {
       return;
     }
 
+    // Public React SPA and static assets.
+    //
+    // API routes remain protected below.
+    const isFrontendRequest =
+      (request.method === 'GET'|| request.method === 'HEAD') &&
+      !request.url.startsWith('/api/') &&
+      !request.url.startsWith('/ws');
+
+    if (isFrontendRequest) {
+      return;
+    }
+
+    // Protected API requests require a Bearer token.
     const header = request.headers.authorization;
 
     if (!header?.startsWith('Bearer ')) {
@@ -57,7 +75,7 @@ export default fp(async (app: FastifyInstance) => {
     }
 
     const user = await service.authenticate(
-      header.slice(7).trim()
+      header.slice(7).trim(),
     );
 
     if (!user) {
