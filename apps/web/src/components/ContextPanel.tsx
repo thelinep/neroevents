@@ -1,42 +1,152 @@
-import { useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { updateContext } from '../store/slices/currentProjectSlice';
-import { AppDispatch } from '../store';
+import {
+  useState,
+} from 'react';
+
+import {
+  useDispatch,
+} from 'react-redux';
+
+import {
+  Button,
+  Input,
+} from '@nevo/ui';
+
+import {
+  updateContext,
+} from '../store/slices/currentProjectSlice';
+
+import type {
+  AppDispatch,
+} from '../store';
 
 interface ContextPanelProps {
   projectId: string;
-  context: Record<string, any>;
+  context: Record<
+    string,
+    unknown
+  >;
 }
 
-export default function ContextPanel({ projectId, context }: ContextPanelProps) {
-  const dispatch = useDispatch<AppDispatch>();
-  const [editKey, setEditKey] = useState('');
-  const [editValue, setEditValue] = useState('');
-//   const [editingKey, setEditingKey] = useState<string | null>(null);
+export default function ContextPanel({
+  projectId,
+  context,
+}: ContextPanelProps) {
+  const dispatch =
+    useDispatch<AppDispatch>();
+
+  const [
+    editKey,
+    setEditKey,
+  ] = useState('');
+
+  const [
+    editValue,
+    setEditValue,
+  ] = useState('');
 
   const addOrUpdate = () => {
-    if (!editKey.trim()) return;
-    dispatch(updateContext({ [editKey]: editValue }));
+    const key = editKey.trim();
+
+    if (!key) {
+      return;
+    }
+
+    dispatch(
+      updateContext({
+        [key]: editValue,
+      }),
+    );
+
     setEditKey('');
     setEditValue('');
   };
 
   return (
-    <div className="bg-[#0f172a] border border-[#1e293b] rounded-lg p-3">
-      <h4 className="font-semibold text-sm mb-2">🧠 Context {projectId ?? 'Unknown'}</h4>
-      <div className="space-y-1 text-sm max-h-40 overflow-auto">
-        {Object.entries(context).map(([key, value]) => (
-          <div key={key} className="flex justify-between items-center border-b border-[#1e293b] py-1">
-            <span className="text-blue-400">{key}:</span>
-            <span className="text-gray-300">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
-          </div>
-        ))}
-        {Object.keys(context).length === 0 && <span className="text-gray-500 text-xs">No context stored.</span>}
+    <div className="rounded-lg border border-[#1e293b] bg-[#0f172a] p-3">
+      <h4 className="mb-2 text-sm font-semibold">
+        🧠 Context{' '}
+        {projectId || 'Unknown'}
+      </h4>
+
+      <div className="max-h-40 space-y-1 overflow-auto text-sm">
+        {Object.entries(context).map(
+          ([key, value]) => (
+            <div
+              key={key}
+              className="flex items-center justify-between border-b border-[#1e293b] py-1"
+            >
+              <span className="text-blue-400">
+                {key}:
+              </span>
+
+              <span className="text-right text-gray-300">
+                {typeof value === 'string'
+                  ? value
+                  : JSON.stringify(
+                      value,
+                    )}
+              </span>
+            </div>
+          ),
+        )}
+
+        {Object.keys(context).length ===
+          0 && (
+          <span className="text-xs text-gray-500">
+            No context stored.
+          </span>
+        )}
       </div>
+
       <div className="mt-2 flex gap-2">
-        <input className="flex-1 bg-[#1e293b] border border-[#334155] rounded p-1 text-xs" placeholder="Key" value={editKey} onChange={e => setEditKey(e.target.value)} />
-        <input className="flex-1 bg-[#1e293b] border border-[#334155] rounded p-1 text-xs" placeholder="Value" value={editValue} onChange={e => setEditValue(e.target.value)} />
-        <button onClick={addOrUpdate} className="bg-blue-500 text-white px-2 py-1 rounded text-xs">Add</button>
+        <Input
+          aria-label="Context key"
+          className="flex-1 text-xs"
+          placeholder="Key"
+          value={editKey}
+          onChange={(event) =>
+            setEditKey(
+              event.target.value,
+            )
+          }
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Enter'
+            ) {
+              event.preventDefault();
+              addOrUpdate();
+            }
+          }}
+        />
+
+        <Input
+          aria-label="Context value"
+          className="flex-1 text-xs"
+          placeholder="Value"
+          value={editValue}
+          onChange={(event) =>
+            setEditValue(
+              event.target.value,
+            )
+          }
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Enter'
+            ) {
+              event.preventDefault();
+              addOrUpdate();
+            }
+          }}
+        />
+
+        <Button
+          type="button"
+          disabled={!editKey.trim()}
+          onClick={addOrUpdate}
+          className="px-2 py-1 text-xs"
+        >
+          Add
+        </Button>
       </div>
     </div>
   );

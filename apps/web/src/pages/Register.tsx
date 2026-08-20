@@ -1,37 +1,217 @@
-import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { Link, useNavigate } from 'react-router-dom';
-import { register } from '../store/slices/authSlice';
-import type { AppDispatch, RootState } from '../store';
+import {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
+  Button,
+  Input,
+  Label,
+} from '@nevo/ui';
+
+import {
+  useDispatch,
+  useSelector,
+} from 'react-redux';
+
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
+
+import {
+  register,
+} from '../store/slices/authSlice';
+
+import type {
+  SubmitEvent,
+} from 'react';
+
+import type {
+  AppDispatch,
+  RootState,
+} from '../store';
 
 export default function Register() {
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
-  const { token, isLoading, error } = useSelector((state: RootState) => state.auth);
+  const [
+    displayName,
+    setDisplayName,
+  ] = useState('');
 
-  useEffect(() => { if (token) navigate('/dashboard', { replace: true }); }, [token, navigate]);
+  const [
+    email,
+    setEmail,
+  ] = useState('');
 
-  const submit = (event: React.FormEvent) => {
+  const [
+    password,
+    setPassword,
+  ] = useState('');
+
+  const dispatch =
+    useDispatch<AppDispatch>();
+
+  const navigate =
+    useNavigate();
+
+  const {
+    token,
+    isLoading,
+    error,
+  } = useSelector(
+    (state: RootState) =>
+      state.auth,
+  );
+
+  useEffect(() => {
+    if (token) {
+      navigate(
+        '/dashboard',
+        { replace: true },
+      );
+    }
+  }, [
+    token,
+    navigate,
+  ]);
+
+  const submit = (
+    event: SubmitEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
-    dispatch(register({ email, password, displayName: displayName || undefined }));
+
+    dispatch(
+      register({
+        email,
+        password,
+        displayName:
+          displayName || undefined,
+      }),
+    );
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-[#080c16] text-white">
-      <form onSubmit={submit} className="bg-[#0f172a] p-8 rounded-lg w-96 border border-[#1e293b]">
-        <h1 className="text-2xl font-bold text-center mb-2">Create your Nevo account</h1>
-        <p className="text-gray-400 text-sm text-center mb-6">Start building with Nevo.</p>
-        {error && <div role="alert" className="text-red-400 text-sm mb-3">{error}</div>}
-        <input className="w-full bg-[#1e293b] border border-[#334155] rounded p-2 mb-2" placeholder="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-        <input className="w-full bg-[#1e293b] border border-[#334155] rounded p-2 mb-2" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input className="w-full bg-[#1e293b] border border-[#334155] rounded p-2 mb-1" type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={12} required />
-        <p className="text-xs text-gray-500 mb-4">12+ characters with upper/lowercase, number and symbol.</p>
-        <button type="submit" disabled={isLoading} className="w-full bg-blue-500 text-white py-2 rounded disabled:opacity-50">{isLoading ? 'Creating...' : 'Create account'}</button>
-        <p className="text-sm text-gray-400 text-center mt-4">Already have an account? <Link className="text-blue-400" to="/login">Sign in</Link></p>
+    <main className="flex min-h-screen items-center justify-center bg-[#080c16] px-4 text-white">
+      <form
+        onSubmit={submit}
+        className={[
+          'w-full max-w-md',
+          'rounded-lg',
+          'border border-[#1e293b]',
+          'bg-[#0f172a]',
+          'p-8',
+          'shadow-2xl',
+        ].join(' ')}
+      >
+        <h1 className="mb-2 text-center text-2xl font-bold">
+          Create your Nevo account
+        </h1>
+
+        <p className="mb-6 text-center text-sm text-gray-400">
+          Start building with Nevo.
+        </p>
+
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 text-sm text-red-400"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="mb-4 space-y-1">
+          <Label htmlFor="display-name">
+            Display name
+          </Label>
+
+          <Input
+            id="display-name"
+            name="displayName"
+            type="text"
+            autoComplete="name"
+            placeholder="Display name"
+            value={displayName}
+            onChange={(event) =>
+              setDisplayName(
+                event.target.value,
+              )
+            }
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="mb-4 space-y-1">
+          <Label htmlFor="register-email">
+            Email
+          </Label>
+
+          <Input
+            id="register-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="Email"
+            value={email}
+            onChange={(event) =>
+              setEmail(
+                event.target.value,
+              )
+            }
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <div className="mb-1 space-y-1">
+          <Label htmlFor="register-password">
+            Password
+          </Label>
+
+          <Input
+            id="register-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) =>
+              setPassword(
+                event.target.value,
+              )
+            }
+            minLength={12}
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <p className="mb-4 text-xs text-gray-500">
+          12+ characters with
+          upper/lowercase, number and
+          symbol.
+        </p>
+
+        <Button
+          type="submit"
+          disabled={isLoading}
+          className="w-full"
+        >
+          {isLoading
+            ? 'Creating...'
+            : 'Create account'}
+        </Button>
+
+        <p className="mt-4 text-center text-sm text-gray-400">
+          Already have an account?{' '}
+          <Link
+            className="text-blue-400 hover:text-blue-300"
+            to="/login"
+          >
+            Sign in
+          </Link>
+        </p>
       </form>
-    </div>
+    </main>
   );
 }

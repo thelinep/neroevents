@@ -8,6 +8,26 @@ test.describe('M23 Project UX & Reliability', () => {
     // Auth
     await register(page, testData);
 
+        page.on('console', msg => {
+  console.log(`[browser:${msg.type()}] ${msg.text()}`);
+});
+
+page.on('request', request => {
+  if (request.url().includes('/api/projects')) {
+    console.log('PROJECT REQUEST:', request.method(), request.url());
+  }
+});
+
+page.on('response', response => {
+  if (response.url().includes('/api/projects')) {
+    console.log(
+      'PROJECT RESPONSE:',
+      response.status(),
+      response.url(),
+    );
+  }
+});
+
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(
       page.getByRole('heading', { name: 'Dashboard' }),
@@ -21,10 +41,25 @@ test.describe('M23 Project UX & Reliability', () => {
     await page.getByPlaceholder('Project name')
       .fill(testData.projectName);
 
-    await page.getByRole('button', {
-      name: 'Create',
-      exact: true,
-    }).click();
+      console.log(
+  await page.locator('#nevo-portal-root').evaluate((root) => ({
+    rect: root.getBoundingClientRect().toJSON(),
+    position: getComputedStyle(root).position,
+    width: getComputedStyle(root).width,
+    height: getComputedStyle(root).height,
+    pointerEvents: getComputedStyle(root).pointerEvents,
+  })),
+);
+
+const createButton = page.getByRole('button', {
+  name: 'Create',
+  exact: true,
+});
+
+await expect(createButton).toBeVisible();
+await expect(createButton).toBeEnabled();
+
+await createButton.click();
 
     // Project route
     await expect(page).toHaveURL(/\/project\/[^/]+$/);
@@ -42,6 +77,8 @@ test.describe('M23 Project UX & Reliability', () => {
 
     // Reload / deep-link reliability
     await page.reload();
+
+
 
     await expect(page).toHaveURL(/\/project\/[^/]+$/);
 

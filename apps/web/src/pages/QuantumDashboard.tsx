@@ -1,14 +1,67 @@
-import  { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchPerformance, fetchGraph, processGoal } from '../store/slices/quantumSlice';
-import { RootState, AppDispatch } from '../store';
+import {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
+  useDispatch,
+  useSelector,
+} from 'react-redux';
+
+import {
+  Button,
+  Input,
+} from '@nevo/ui';
+
+import {
+  fetchPerformance,
+  fetchGraph,
+  processGoal,
+} from '../store/slices/quantumSlice';
+
+import type {
+  RootState,
+  AppDispatch,
+} from '../store';
+
 import KnowledgeGraphVis from '../components/KnowledgeGraphVis';
 
+type Autonomy =
+  | 'min'
+  | 'average'
+  | 'high'
+  | 'full';
+
+interface PerformanceItem {
+  model_name: string;
+  task_type: string;
+  success_count: number;
+  total_count: number;
+}
+
 export default function QuantumDashboard() {
-  const dispatch = useDispatch<AppDispatch>();
-  const { performance, graph } = useSelector((state: RootState) => state.quantum);
-  const [prompt, setPrompt] = useState('');
-  const [autonomy, setAutonomy] = useState('medium');
+  const dispatch =
+    useDispatch<AppDispatch>();
+
+  const {
+    performance,
+    graph,
+  } = useSelector(
+    (state: RootState) =>
+      state.quantum,
+  );
+
+  const [
+    prompt,
+    setPrompt,
+  ] = useState('');
+
+  const [
+    autonomy,
+    setAutonomy,
+  ] = useState<Autonomy>(
+    'average',
+  );
 
   useEffect(() => {
     dispatch(fetchPerformance());
@@ -16,43 +69,134 @@ export default function QuantumDashboard() {
   }, [dispatch]);
 
   const handleProcess = () => {
-    if (prompt) dispatch(processGoal({ prompt, autonomy }));
+    const trimmedPrompt =
+      prompt.trim();
+
+    if (!trimmedPrompt) {
+      return;
+    }
+
+    dispatch(
+      processGoal({
+        prompt: trimmedPrompt,
+        autonomy,
+      }),
+    );
   };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">🧠 Quantum Dashboard</h2>
-      <div className="bg-[#1e293b] p-4 rounded">
-        <h3 className="font-semibold">Process New Goal</h3>
-        <div className="flex flex-wrap gap-2 mt-2">
-          <input className="flex-1 bg-[#0f172a] border border-[#334155] rounded p-2" placeholder="Enter your goal..." value={prompt} onChange={e => setPrompt(e.target.value)} />
-          <select className="bg-[#0f172a] border border-[#334155] rounded p-2" value={autonomy} onChange={e => setAutonomy(e.target.value)}>
-            <option value="min">🛑 Min – Ask before every task</option>
-            <option value="average">⚖️ Average – Ask for high‑impact actions</option>
-            <option value="high">🚀 High – Ask only for deployment</option>
-            <option value="full">🧠 Full – No approvals</option>
+      <h2 className="text-2xl font-bold">
+        🧠 Quantum Dashboard
+      </h2>
+
+      <section className="rounded-lg border border-[#334155] bg-[#1e293b] p-4">
+        <h3 className="font-semibold">
+          Process New Goal
+        </h3>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Input
+            aria-label="Goal"
+            className="min-w-[240px] flex-1"
+            placeholder="Enter your goal..."
+            value={prompt}
+            onChange={(event) =>
+              setPrompt(
+                event.target.value,
+              )
+            }
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter'
+              ) {
+                event.preventDefault();
+                handleProcess();
+              }
+            }}
+          />
+
+          <select
+            aria-label="Autonomy level"
+            className="rounded-lg border border-[#334155] bg-[#0f172a] p-2 text-white"
+            value={autonomy}
+            onChange={(event) =>
+              setAutonomy(
+                event.target
+                  .value as Autonomy,
+              )
+            }
+          >
+            <option value="min">
+              🛑 Min – Ask before every task
+            </option>
+
+            <option value="average">
+              ⚖️ Average – Ask for high-impact actions
+            </option>
+
+            <option value="high">
+              🚀 High – Ask only for deployment
+            </option>
+
+            <option value="full">
+              🧠 Full – No approvals
+            </option>
           </select>
-          <button onClick={handleProcess} className="bg-blue-500 px-4 py-2 rounded">Run</button>
+
+          <Button
+            type="button"
+            onClick={handleProcess}
+            disabled={!prompt.trim()}
+          >
+            Run
+          </Button>
         </div>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-[#1e293b] p-4 rounded col-span-2">
-          <h4 className="font-semibold mb-2">Knowledge Graph</h4>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="col-span-2 rounded-lg border border-[#334155] bg-[#1e293b] p-4">
+          <h4 className="mb-2 font-semibold">
+            Knowledge Graph
+          </h4>
+
           <div className="h-64 overflow-auto">
-            <KnowledgeGraphVis nodes={graph.nodes} edges={graph.edges} />
+            <KnowledgeGraphVis
+              nodes={graph.nodes}
+              edges={graph.edges}
+            />
           </div>
-        </div>
-        <div className="bg-[#1e293b] p-4 rounded">
-          <h4 className="font-semibold mb-2">Model Performance</h4>
+        </section>
+
+        <section className="rounded-lg border border-[#334155] bg-[#1e293b] p-4">
+          <h4 className="mb-2 font-semibold">
+            Model Performance
+          </h4>
+
           <div className="space-y-2 text-sm">
-            {performance.map((p: any) => (
-              <div key={`${p.model_name}-${p.task_type}`} className="flex justify-between border-b border-[#334155] py-1">
-                <span>{p.model_name} ({p.task_type})</span>
-                <span className="text-gray-400">success: {p.success_count}/{p.total_count}</span>
-              </div>
-            ))}
+            {performance.map(
+              (
+                item: PerformanceItem,
+              ) => (
+                <div
+                  key={`${item.model_name}-${item.task_type}`}
+                  className="flex justify-between border-b border-[#334155] py-1"
+                >
+                  <span>
+                    {item.model_name}{' '}
+                    ({item.task_type})
+                  </span>
+
+                  <span className="text-gray-400">
+                    success:{' '}
+                    {item.success_count}/
+                    {item.total_count}
+                  </span>
+                </div>
+              ),
+            )}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -1,0 +1,15 @@
+:root {
+  --nevo-bg-canvas: #0b1120;
+  --nevo-bg-surface: #0f172a;
+  --nevo-bg-elevated: #1e293b;
+
+  --nevo-border-subtle: #1e293b;
+  --nevo-border-default: #334155;
+
+  --nevo-accent-primary: #3b82f6;
+  --nevo-accent-primary-hover: #2563eb;
+
+  --nevo-text-primary: #f8fafc;
+  --nevo-text-secondary: #94a3b8;
+  --nevo-text-muted: #64748b;
+}

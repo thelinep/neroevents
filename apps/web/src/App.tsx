@@ -21,7 +21,15 @@ import Layout from './components/Layout';
 function SessionBootstrap() {
   const dispatch = useDispatch<AppDispatch>();
   const { token, isRestoring } = useSelector((state: RootState) => state.auth);
-  useEffect(() => { if (token) void dispatch(restoreSession()); }, [dispatch, token]);
+
+  useEffect(() => {
+  if (token) {
+    void dispatch(restoreSession());
+  }
+  // Session restoration is an application bootstrap operation.
+  // Do not rerun it when login/register changes the token.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
   if (token && isRestoring) return <div className="flex h-screen items-center justify-center bg-[#080c16] text-white">Restoring session…</div>;
   return null;
 }

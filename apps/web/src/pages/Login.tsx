@@ -1,69 +1,183 @@
-import React, { useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import { login } from '../store/slices/authSlice';
-import { Link } from 'react-router-dom';
-import { AppDispatch, RootState } from '../store';
+import {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
+  Button,
+  Input,
+  Label,
+} from '@nevo/ui';
+
+import {
+  useDispatch,
+  useSelector,
+} from 'react-redux';
+
+import {
+  Link,
+  useNavigate,
+} from 'react-router-dom';
+
+import {
+  login,
+} from '../store/slices/authSlice';
+
+import type {
+  SubmitEvent,
+} from 'react';
+
+import type {
+  AppDispatch,
+  RootState,
+} from '../store';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const dispatch = useDispatch<AppDispatch>();
-  const navigate = useNavigate();
-  const { token, isLoading, error } = useSelector((state: RootState) => state.auth);
+  const [
+    email,
+    setEmail,
+  ] = useState('');
 
-  // Redirect to dashboard if already authenticated
+  const [
+    password,
+    setPassword,
+  ] = useState('');
+
+  const dispatch =
+    useDispatch<AppDispatch>();
+
+  const navigate =
+    useNavigate();
+
+  const {
+    token,
+    isLoading,
+    error,
+  } = useSelector(
+    (state: RootState) =>
+      state.auth,
+  );
+
   useEffect(() => {
     if (token) {
       navigate('/dashboard');
     }
-  }, [token, navigate]);
+  }, [
+    token,
+    navigate,
+  ]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) return;
-    dispatch(login({ email, password }));
+  const handleSubmit = (
+    event: SubmitEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !email ||
+      !password
+    ) {
+      return;
+    }
+
+    dispatch(
+      login({
+        email,
+        password,
+      }),
+    );
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-[#080c16]">
-      <form onSubmit={handleSubmit} className="bg-[#0f172a] p-8 rounded-lg w-96">
-        <h1 className="text-2xl font-bold text-center mb-4">Sign In</h1>
-        {error && <div className="text-red-400 text-sm mb-2">{error}</div>}
-     <label htmlFor="email" className="sr-only">
-  Email
-</label>
-<input
-  id="email"
-  type="email"
-  className="w-full bg-[#1e293b] border border-[#334155] rounded p-2 mb-2"
-  placeholder="Email"
-  value={email}
-  onChange={(e) => setEmail(e.target.value)}
-  required
-/>
+    <main className="flex min-h-screen items-center justify-center bg-[#080c16] px-4">
+      <form
+        onSubmit={handleSubmit}
+        className={[
+          'w-full max-w-md',
+          'rounded-lg',
+          'border border-[#1e293b]',
+          'bg-[#0f172a]',
+          'p-8',
+          'text-white',
+          'shadow-2xl',
+        ].join(' ')}
+      >
+        <h1 className="mb-6 text-center text-2xl font-bold">
+          Sign In
+        </h1>
 
-<label htmlFor="password" className="sr-only">
-  Password
-</label>
-<input
-  id="password"
-  type="password"
-  className="w-full bg-[#1e293b] border border-[#334155] rounded p-2 mb-4"
-  placeholder="Password"
-  value={password}
-  onChange={(e) => setPassword(e.target.value)}
-  required
-/>
-        <button
+        {error && (
+          <div
+            role="alert"
+            className="mb-4 text-sm text-red-400"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="mb-4 space-y-1">
+          <Label htmlFor="email">
+            Email
+          </Label>
+
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="Email"
+            value={email}
+            onChange={(event) =>
+              setEmail(
+                event.target.value,
+              )
+            }
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <div className="mb-6 space-y-1">
+          <Label htmlFor="password">
+            Password
+          </Label>
+
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) =>
+              setPassword(
+                event.target.value,
+              )
+            }
+            disabled={isLoading}
+            required
+          />
+        </div>
+
+        <Button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-blue-500 text-white py-2 rounded disabled:opacity-50"
+          className="w-full"
         >
-          {isLoading ? 'Signing in...' : 'Login'}
-        </button>
-        <p className="text-sm text-gray-400 text-center mt-4">New to Nevo? <Link className="text-blue-400" to="/register">Create an account</Link></p>
+          {isLoading
+            ? 'Signing in...'
+            : 'Login'}
+        </Button>
+
+        <p className="mt-4 text-center text-sm text-gray-400">
+          New to Nevo?{' '}
+          <Link
+            className="text-blue-400 hover:text-blue-300"
+            to="/register"
+          >
+            Create an account
+          </Link>
+        </p>
       </form>
-    </div>
+    </main>
   );
 }

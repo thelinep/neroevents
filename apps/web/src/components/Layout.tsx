@@ -5,6 +5,7 @@ import { logout } from '../store/slices/authSlice';
 import { toggleSidebar } from '../store/slices/uiSlice';
 import { RootState, AppDispatch } from '../store';
 import { Home, Clock, Settings, User, LogOut, Menu, Bot, MessageSquare, Cpu, Activity, Bug } from 'lucide-react';
+import { Button } from '@nevo/ui';
 
 
 const NavLink = ({
@@ -68,12 +69,14 @@ export default function Layout() {
             </span>
           )}
 
-          <button
-            onClick={() => dispatch(toggleSidebar())}
-            className="text-gray-400 hover:text-white"
-          >
-            <Menu size={20} />
-          </button>
+ <Button
+  type="button"
+  variant="ghost"
+  aria-label="Toggle sidebar"
+  onClick={() => dispatch(toggleSidebar())}
+>
+  <Menu size={20} />
+</Button>
         </div>
 
         <nav className="flex-1 space-y-2">
@@ -152,13 +155,14 @@ export default function Layout() {
               </span>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-sm text-gray-400 hover:text-white"
-            >
-              <LogOut size={16} />
-              Logout
-            </button>
+        <Button
+  type="button"
+  variant="ghost"
+  onClick={() => void handleLogout()}
+>
+  <LogOut size={16} />
+  Logout
+</Button>
           </div>
         )}
       </aside>
@@ -172,9 +176,13 @@ export default function Layout() {
           </h1>
 
           <div className="flex items-center gap-4">
-            <button className="text-gray-400 hover:text-white">
-              🔔
-            </button>
+          <Button
+  type="button"
+  variant="ghost"
+  aria-label="Notifications"
+>
+  🔔
+</Button>
           </div>
         </header>
 
