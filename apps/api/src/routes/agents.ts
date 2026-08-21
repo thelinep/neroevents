@@ -1,10 +1,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../memory/store.js';
 import { randomBytes } from 'crypto';
+import { requirePermission } from '../authorization/require-permission.js';
 
 export default async function agentsRoutes(fastify: FastifyInstance) {
   // List agents
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:read')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const tenantId = req.tenant!.id;
     const result = await pool.query(
@@ -16,6 +21,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
 
   // Create agent
   fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:create')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const tenantId = req.tenant!.id;
     const {
@@ -56,6 +65,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
 
     // Get a single agent
   fastify.get('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:read')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const tenantId = req.tenant!.id;
     const { id } = req.params as { id: string };
@@ -86,6 +99,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
   // Update agent
   // Update agent
   fastify.put('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:update')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
 
@@ -183,6 +200,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
   });
   // Delete agent
   fastify.delete('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:delete')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const result = await pool.query(
@@ -197,6 +218,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
 
   // Share agent
   fastify.post('/:id/share', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'agent:share')) {
+      return;
+    }
+
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const shareToken = randomBytes(16).toString('hex');
