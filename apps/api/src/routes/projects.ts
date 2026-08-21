@@ -1,9 +1,13 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../memory/store.js';
+import { requirePermission } from '../authorization/require-permission.js';
 
 export default async function projectsRoutes(fastify: FastifyInstance) {
   // Get all projects
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'project:read')) {
+  return;
+}
     const userId = req.user?.id;
     const tenantId = req.tenant!.id;
     const result = await pool.query(
@@ -15,6 +19,9 @@ export default async function projectsRoutes(fastify: FastifyInstance) {
 
   // Create project
 fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requirePermission(req, reply, 'project:create')) {
+    return;
+  }
   const userId = req.user?.id;
   const tenantId = req.tenant!.id;
 
@@ -62,6 +69,9 @@ fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
 
   // Get single project
   fastify.get('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'project:read')) {
+  return;
+}
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const tenantId = req.tenant!.id;
@@ -81,6 +91,9 @@ WHERE id = $1
 
   // Update project
   fastify.put('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'project:update')) {
+      return;
+    }
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const { name, description, context } = req.body as { name?: string; description?: string; context?: any };
@@ -104,6 +117,9 @@ WHERE id = $1
 
 // Get history for project
 fastify.get('/:id/history', async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requirePermission(req, reply, 'project:read')) {
+  return;
+}
   const userId = req.user?.id;
   const { id } = req.params as { id: string };
 
@@ -129,6 +145,9 @@ fastify.get('/:id/history', async (req: FastifyRequest, reply: FastifyReply) => 
 
   // Delete project
   fastify.delete('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'project:delete')) {
+      return;
+    }
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const result = await pool.query(
@@ -143,6 +162,9 @@ fastify.get('/:id/history', async (req: FastifyRequest, reply: FastifyReply) => 
 
   // Get tasks for project
   fastify.get('/:id/tasks', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!requirePermission(req, reply, 'project:read')) {
+  return;
+}
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     // Verify ownership
