@@ -7,3 +7,13 @@ export interface AuditEventInput {
   resourceId?: string | null;
   metadata?: Record<string, unknown>;
 }
+
+export interface AuditEventQuery {
+  tenantId: string;
+  limit?: number;
+  offset?: number;
+  action?: string;
+  resourceType?: string;
+  resourceId?: string;
+  userId?: string;
+}
