@@ -89,6 +89,7 @@ interface TestSession {
 }
 
 let app!: ReturnType<typeof buildApp>;
+    let filesystemRoot: string;
 
 
 
@@ -302,15 +303,16 @@ describe('M26.3 tenant security', () => {
 
     await app.ready();
 
-    const root = await fs.mkdtemp(
-      path.join(
-        os.tmpdir(),
-        'nevo-m26-3-tenant-security-',
-      ),
-    );
+   filesystemRoot = await fs.mkdtemp(
+  path.join(
+    os.tmpdir(),
+    'nevo-m26-3-tenant-security-',
+  ),
+);
 
-    tenantAFilesystem = path.join(root, 'tenant-a');
-    tenantBFiles = path.join(root, 'tenant-b');
+
+    tenantAFilesystem = path.join(filesystemRoot, 'tenant-a');
+    tenantBFiles = path.join(filesystemRoot, 'tenant-b');
 
     await fs.mkdir(tenantAFilesystem, {
       recursive: true,
@@ -332,7 +334,7 @@ describe('M26.3 tenant security', () => {
       'utf8',
     );
 
-    process.env.NEVO_WORKSPACE_ROOT = root;
+    process.env.NEVO_WORKSPACE_ROOT = filesystemRoot;
   });
 
   afterAll(async () => {
@@ -561,6 +563,9 @@ describe('M26.3 tenant security', () => {
 
       expect([403, 404]).toContain(response.statusCode);
     });
+
+
+
   });
 
   describe('filesystem isolation', () => {
@@ -592,50 +597,51 @@ describe('M26.3 tenant security', () => {
 
 
 
-  it('allows access to the current tenant filesystem', async () => {
+    it('allows access to the current tenant filesystem', async () => {
   const session = await createTestSession(
     'filesystem-current',
   );
 
-  const tenantADir = path.resolve(process.cwd(), 'tenant-a');
-  const tenantAFile = path.join(tenantADir, 'tenant-a.txt');
+  const tenantDir = path.join(
+    filesystemRoot,
+    session.tenant.id,
+  );
 
-  await fs.mkdir(tenantADir, { recursive: true });
+  await fs.mkdir(tenantDir, {
+    recursive: true,
+  });
+
   await fs.writeFile(
-    tenantAFile,
+    path.join(tenantDir, 'tenant-a.txt'),
     'tenant-a test file',
     'utf8',
   );
 
-  try {
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/files/list?dir=tenant-a',
-      headers: authHeaders(
-        session,
-        session.tenant.id,
-      ),
-    });
+  const response = await app.inject({
+    method: 'GET',
+    url: '/api/files/list',
+    headers: authHeaders(
+      session,
+      session.tenant.id,
+    ),
+  });
 
-    expect(response.statusCode).toBe(200);
+  expect(response.statusCode).toBe(200);
 
-    const body = response.json<{
-      items: Array<{
-        name: string;
-      }>;
-    }>();
+  const body = response.json<{
+    items: Array<{ name: string }>;
+  }>();
 
-    expect(
-      body.items.some(
-        (item) => item.name === 'tenant-a.txt',
-      ),
-    ).toBe(true);
-  } finally {
-    await fs.rm(tenantADir, {
-      recursive: true,
-      force: true,
-    });
-  }
+  expect(
+    body.items.some(
+      (item) => item.name === 'tenant-a.txt',
+    ),
+  ).toBe(true);
+
+  await fs.rm(tenantDir, {
+    recursive: true,
+    force: true,
+  });
 });
 
     it('rejects traversal outside the tenant filesystem', async () => {

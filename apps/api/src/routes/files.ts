@@ -14,15 +14,35 @@ interface FileQuery {
   file?: string;
 }
 
-const WORKSPACE_ROOT = path.resolve(
-  process.env.NEVO_WORKSPACE_ROOT || process.cwd(),
-);
 
-function resolveSafePath(relativePath = ''): string {
-  const root = path.resolve(WORKSPACE_ROOT);
-  const resolved = path.resolve(root, relativePath);
 
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+function workspaceRoot(): string {
+  return path.resolve(
+    process.env.NEVO_WORKSPACE_ROOT || process.cwd(),
+  );
+}
+
+function tenantRoot(tenantId: string): string {
+  return path.resolve(
+    workspaceRoot(),
+    tenantId,
+  );
+}
+
+function resolveSafePath(
+  relativePath: string,
+  root: string,
+): string {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(
+    resolvedRoot,
+    relativePath,
+  );
+
+  if (
+    resolved !== resolvedRoot &&
+    !resolved.startsWith(`${resolvedRoot}${path.sep}`)
+  ) {
     throw new Error('Invalid path');
   }
 
@@ -42,9 +62,19 @@ export default async function filesRoutes(
       reply: FastifyReply,
     ) => {
       try {
-        const dir = request.query.dir || '';
-        const directory = resolveSafePath(dir);
+       const tenantId = request.tenant?.id;
 
+if (!tenantId) {
+  return reply.status(400).send({
+    error: 'Tenant selection required',
+  });
+}
+
+const dir = request.query.dir || '';
+const directory = resolveSafePath(
+  dir,
+  tenantRoot(tenantId),
+);
         const stat = await fs.stat(directory);
 
         if (!stat.isDirectory()) {
@@ -125,8 +155,17 @@ export default async function filesRoutes(
             error: 'File path is required',
           });
         }
+const tenantId = request.tenant?.id;
 
-        const filePath = resolveSafePath(file);
+if (!tenantId) {
+  return reply.status(400).send({
+    error: 'Tenant selection required',
+  });
+}
+        const filePath = resolveSafePath(
+  file,
+  tenantRoot(tenantId),
+);
         const stat = await fs.stat(filePath);
 
         if (!stat.isFile()) {
