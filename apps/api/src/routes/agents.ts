@@ -2,8 +2,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../memory/store.js';
 import { randomBytes } from 'crypto';
 import { requirePermission } from '../authorization/require-permission.js';
+import { AuditService } from '../audit/audit.service.js';
 
 export default async function agentsRoutes(fastify: FastifyInstance) {
+  const auditService = new AuditService(pool);
   // List agents
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
     if (!requirePermission(req, reply, 'agent:read')) {
@@ -60,6 +62,17 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
       [userId, tenantId, name, description, system_prompt, model_provider, model_name,
        temperature || 0.7, JSON.stringify(tools || []), is_public || false]
     );
+    await auditService.record({
+  tenantId,
+  userId,
+  resourceId: result.rows[0].id,
+  action: 'agent:create',
+  resourceType: 'agent',
+  metadata: {
+    modelProvider: model_provider,
+    modelName: model_name,
+  },
+});
     return reply.status(201).send(result.rows[0]);
   });
 
@@ -196,6 +209,17 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
       });
     }
 
+    await auditService.record({
+  tenantId: req.tenant!.id,
+  userId,
+  resourceId: id,
+  action: 'agent:update',
+  resourceType: 'agent',
+  metadata: {
+    fields: Object.keys(updates),
+  },
+});
+
     return result.rows[0];
   });
   // Delete agent
@@ -213,6 +237,15 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Agent not found' });
     }
+
+    await auditService.record({
+  tenantId: req.tenant!.id,
+  userId,
+  resourceId: id,
+  action: 'agent:delete',
+  resourceType: 'agent',
+});
+
     return reply.status(204).send();
   });
 
@@ -235,6 +268,13 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Agent not found' });
     }
+    await auditService.record({
+  tenantId: req.tenant!.id,
+  userId,
+  resourceId: id,
+  action: 'agent:share',
+  resourceType: 'agent',
+});
     return { shareToken };
   });
 }

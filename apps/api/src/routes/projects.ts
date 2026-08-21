@@ -1,8 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { pool } from '../memory/store.js';
 import { requirePermission } from '../authorization/require-permission.js';
+import { AuditService } from '../audit/audit.service.js';
 
 export default async function projectsRoutes(fastify: FastifyInstance) {
+  const auditService = new AuditService(pool);
   // Get all projects
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
     if (!requirePermission(req, reply, 'project:read')) {
@@ -48,6 +50,15 @@ fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
       RETURNING id, name, user_id, tenant_id, description, context, created_at, updated_at`,
       [userId, tenantId, name, description || '', context || {}],
     );
+
+    await auditService.record({
+  tenantId,
+  userId,
+  projectId: result.rows[0].id,
+  action: 'project:create',
+  resourceType: 'project',
+  resourceId: result.rows[0].id,
+});
 
     return reply.status(201).send(result.rows[0]);
   } catch (error) {
@@ -111,6 +122,19 @@ WHERE id = $1
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Project not found' });
     }
+
+    await auditService.record({
+  tenantId: req.tenant!.id,
+  userId,
+  projectId: id,
+  action: 'project:update',
+  resourceType: 'project',
+  resourceId: id,
+  metadata: {
+    fields: Object.keys(req.body as Record<string, unknown>),
+  },
+});
+
     return result.rows[0];
   });
 
@@ -157,6 +181,21 @@ fastify.get('/:id/history', async (req: FastifyRequest, reply: FastifyReply) => 
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Project not found' });
     }
+
+try {
+  await auditService.record({
+    tenantId: req.tenant!.id,
+    userId,
+    projectId: id,
+    action: 'project:delete',
+    resourceType: 'project',
+    resourceId: id,
+  });
+} catch (error) {
+  req.log.error({ error }, 'project delete audit failed');
+  throw error;
+}
+
     return reply.status(204).send();
   });
 
