@@ -8,6 +8,7 @@ describe('Agents API', () => {
   let token: string;
   let userId: string;
   let agentId: string;
+  let tenantId: string;
 
   const testAgent = {
     name: 'Test Agent',
@@ -39,9 +40,10 @@ app = buildApp();
     const body = JSON.parse(reg.payload);
     token = body.token;
     userId = body.user.id;
-
+    tenantId = body.tenant.id;
     expect(token).toBeDefined();
     expect(userId).toBeDefined();
+    expect(tenantId).toBeDefined();
   });
 
   afterAll(async () => {
@@ -74,6 +76,7 @@ app = buildApp();
       url: '/api/agents',
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         name: 'Incomplete Agent',
@@ -89,6 +92,7 @@ app = buildApp();
       url: '/api/agents',
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: testAgent,
     });
@@ -117,6 +121,7 @@ app = buildApp();
       url: '/api/agents',
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
     });
 
@@ -141,6 +146,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         name: 'Updated Test Agent',
@@ -166,6 +172,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {},
     });
@@ -179,6 +186,7 @@ app = buildApp();
       url: `/api/agents/${agentId}/share`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
     });
 
@@ -209,6 +217,7 @@ app = buildApp();
       url: '/api/agents',
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
     });
 
@@ -245,13 +254,14 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${otherToken}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         name: 'Hijacked Agent',
       },
     });
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
     it('should reject forbidden update fields', async () => {
@@ -260,6 +270,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         user_id: '00000000-0000-0000-0000-000000000000',
@@ -275,6 +286,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         temperature: 3,
@@ -290,6 +302,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         tools: 'search',
@@ -305,6 +318,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         is_public: 'true',
@@ -334,10 +348,11 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${otherBody.token}`,
+        'x-tenant-id': tenantId,
       },
     });
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
   });
 
   it('should delete the authenticated user agent', async () => {
@@ -346,6 +361,7 @@ app = buildApp();
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
     });
 
@@ -359,12 +375,13 @@ app = buildApp();
     expect(db.rows).toHaveLength(0);
   });
 
-  it('should return 404 for a deleted agent', async () => {
+  it('should return 403 for a deleted agent', async () => {
     const res = await app.inject({
       method: 'PUT',
       url: `/api/agents/${agentId}`,
       headers: {
         Authorization: `Bearer ${token}`,
+        'x-tenant-id': tenantId,
       },
       payload: {
         name: 'Should Not Exist',

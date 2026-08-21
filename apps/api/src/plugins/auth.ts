@@ -12,6 +12,13 @@ declare module 'fastify' {
       email: string;
       displayName: string | null;
     };
+
+    tenant?: {
+      id: string;
+      name: string;
+      slug: string;
+      role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+    };
   }
 
   interface FastifyInstance {
@@ -27,6 +34,7 @@ export default fp(async (app: FastifyInstance) => {
 
   app.decorate('authService', service);
   app.decorateRequest('user');
+app.decorateRequest('tenant');
 
   app.addHook('preHandler', async (request, reply) => {
     const publicPaths = [
@@ -85,5 +93,43 @@ export default fp(async (app: FastifyInstance) => {
     }
 
     request.user = user;
+const tenantId = request.headers['x-tenant-id'];
+
+if (typeof tenantId !== 'string' || !tenantId.trim()) {
+  return reply.status(400).send({
+    error: 'Tenant selection required',
+  });
+}
+
+const tenantResult = await pool.query(
+  `
+    SELECT
+      t.id,
+      t.name,
+      t.slug,
+      tm.role
+    FROM tenant_memberships tm
+    JOIN tenants t ON t.id = tm.tenant_id
+    WHERE tm.user_id = $1
+      AND tm.tenant_id = $2
+    LIMIT 1
+  `,
+  [user.id, tenantId.trim()],
+);
+
+if (tenantResult.rows.length === 0) {
+  return reply.status(403).send({
+    error: 'Tenant membership required',
+  });
+}
+
+const tenant = tenantResult.rows[0];
+
+request.tenant = {
+  id: tenant.id,
+  name: tenant.name,
+  slug: tenant.slug,
+  role: tenant.role,
+};
   });
 });

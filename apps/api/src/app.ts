@@ -10,6 +10,7 @@ import authPlugin from './plugins/auth.js';
 import authRoutes from './routes/auth.js';
 import projectsRoutes from './routes/projects.js';
 import agentsRoutes from './routes/agents.js';
+import filesRoutes from './routes/files.js';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -56,7 +57,7 @@ export function buildApp() {
   app.register(authRoutes, { prefix: '/api/auth' });
   app.register(projectsRoutes, { prefix: '/api/projects' });
   app.register(agentsRoutes, { prefix: '/api/agents' });
-
+  app.register(filesRoutes, { prefix: '/api/files' });
 // Error handler
 
 

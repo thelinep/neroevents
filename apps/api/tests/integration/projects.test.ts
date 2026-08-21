@@ -7,6 +7,7 @@ const app=buildApp();
 describe('Projects API', () => {
   let token: string;
   let userId: string;
+  let tenantId: string;
 
   beforeAll(async () => {
     await pool.query('TRUNCATE projects, users, sessions CASCADE');
@@ -20,13 +21,14 @@ describe('Projects API', () => {
     // console.log('PROJECT REGISTER:', reg.statusCode, reg.payload);
     token = regBody.token;
     userId = regBody.user.id;
+    tenantId = regBody.tenant.id;
   });
 
   it('should create a project', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/projects',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-id': tenantId },
       payload: { name: 'Test Project' },
     });
     // console.log('PROJECT CREATE STATUS:', res.statusCode);
@@ -41,7 +43,7 @@ describe('Projects API', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/projects',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'x-tenant-id': tenantId },
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.payload);

@@ -37,11 +37,46 @@ export class AuthService {
          RETURNING id, email, display_name`,
         [randomUUID(), email, passwordHash, displayName ?? email.split('@')[0]],
       );
-      const row = userResult.rows[0];
-      const user: AuthUser = { id: row.id, email: row.email, displayName: row.display_name };
-      const session = await this.createSession(client, user.id);
-      await client.query('COMMIT');
-      return { user, session };
+     const row = userResult.rows[0];
+
+const user: AuthUser = {
+  id: row.id,
+  email: row.email,
+  displayName: row.display_name,
+};
+
+// M26.1 — provision a personal tenant for every new user.
+const tenantName = row.display_name || row.email.split('@')[0];
+const tenantSlug = `personal-${row.id}`;
+
+await client.query(
+  `INSERT INTO tenants (id, name, slug)
+   VALUES ($1, $2, $3)`,
+  [row.id, tenantName, tenantSlug],
+);
+
+await client.query(
+  `INSERT INTO tenant_memberships (tenant_id, user_id, role)
+   VALUES ($1, $2, 'OWNER')`,
+  [row.id, row.id],
+);
+
+const session = await this.createSession(client, user.id);
+
+const tenant = {
+  id: row.id,
+  name: tenantName,
+  slug: tenantSlug,
+  role: 'OWNER' as const,
+};
+
+await client.query('COMMIT');
+
+return {
+  user,
+  session,
+  tenant,
+};
     } catch (error) {
       try { await client.query('ROLLBACK'); } catch {}
       throw error;

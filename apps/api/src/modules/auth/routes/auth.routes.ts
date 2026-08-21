@@ -28,6 +28,7 @@ export async function authRoutes(app: FastifyInstance) {
         user: result.user,
         token: result.session.token,
         expiresAt: result.session.expiresAt.toISOString(),
+        tenant: result.tenant,
       });
     } catch (error) {
       const err = error as { code?: string; message?: string };

@@ -6,9 +6,10 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
   // List agents
   fastify.get('/', async (req: FastifyRequest, reply: FastifyReply) => {
     const userId = req.user?.id;
+    const tenantId = req.tenant!.id;
     const result = await pool.query(
-      'SELECT * FROM custom_agents WHERE user_id = $1 OR is_public = true',
-      [userId]
+      'SELECT * FROM custom_agents WHERE user_id = $1 AND tenant_id = $2 OR is_public = true',
+      [userId, tenantId]
     );
     return result.rows;
   });
@@ -16,6 +17,7 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
   // Create agent
   fastify.post('/', async (req: FastifyRequest, reply: FastifyReply) => {
     const userId = req.user?.id;
+    const tenantId = req.tenant!.id;
     const {
       name,
       description,
@@ -42,14 +44,43 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
 
     const result = await pool.query(
       `INSERT INTO custom_agents (
-        user_id, name, description, system_prompt, model_provider, model_name,
+        user_id, tenant_id, name, description, system_prompt, model_provider, model_name,
         temperature, tools, is_public
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
-      [userId, name, description, system_prompt, model_provider, model_name,
+      [userId, tenantId, name, description, system_prompt, model_provider, model_name,
        temperature || 0.7, JSON.stringify(tools || []), is_public || false]
     );
     return reply.status(201).send(result.rows[0]);
+  });
+
+    // Get a single agent
+  fastify.get('/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const userId = req.user?.id;
+    const tenantId = req.tenant!.id;
+    const { id } = req.params as { id: string };
+
+    const result = await pool.query(
+      `
+        SELECT *
+        FROM custom_agents
+        WHERE id = $1
+          AND tenant_id = $2
+          AND (
+            user_id = $3
+            OR is_public = true
+          )
+      `,
+      [id, tenantId, userId],
+    );
+
+    if (result.rows.length === 0) {
+      return reply.status(404).send({
+        error: 'Agent not found',
+      });
+    }
+
+    return reply.send(result.rows[0]);
   });
 
   // Update agent
@@ -131,12 +162,12 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
       });
     }
 
-    values.push(id, userId);
+    values.push(id, userId, req.tenant!.id);
 
     const query = `
       UPDATE custom_agents
       SET ${fields.join(', ')}, updated_at = NOW()
-      WHERE id = $${idx} AND user_id = $${idx + 1}
+      WHERE id = $${idx} AND user_id = $${idx + 1} AND tenant_id = $${idx + 2}
       RETURNING *
     `;
 
@@ -155,8 +186,8 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
     const userId = req.user?.id;
     const { id } = req.params as { id: string };
     const result = await pool.query(
-      'DELETE FROM custom_agents WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, userId]
+      'DELETE FROM custom_agents WHERE id = $1 AND user_id = $2 AND tenant_id = $3 RETURNING id',
+      [id, userId, req.tenant!.id]
     );
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Agent not found' });
@@ -172,9 +203,9 @@ export default async function agentsRoutes(fastify: FastifyInstance) {
     const result = await pool.query(
       `UPDATE custom_agents
        SET share_token = $1, is_public = true
-       WHERE id = $2 AND user_id = $3
+       WHERE id = $2 AND user_id = $3 AND tenant_id = $4
        RETURNING share_token`,
-      [shareToken, id, userId]
+      [shareToken, id, userId, req.tenant!.id]
     );
     if (result.rows.length === 0) {
       return reply.status(404).send({ error: 'Agent not found' });
