@@ -10,7 +10,8 @@ export type Permission =
   | 'agent:update'
   | 'agent:delete'
   | 'agent:share'
-  | 'audit:read';
+  | 'audit:read'
+  | 'audit:export';
 
 const permissions: Record<Permission, readonly TenantRole[]> = {
   'project:read': ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER'],
@@ -24,6 +25,7 @@ const permissions: Record<Permission, readonly TenantRole[]> = {
   'agent:delete': ['OWNER', 'ADMIN'],
   'agent:share': ['OWNER', 'ADMIN', 'MEMBER'],
   'audit:read': ['OWNER', 'ADMIN'],
+  'audit:export': ['OWNER', 'ADMIN'],
 };
 
 export function hasPermission(

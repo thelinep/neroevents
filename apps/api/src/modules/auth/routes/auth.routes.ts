@@ -52,17 +52,43 @@ export async function authRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/me', async (request, reply) => {
-    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-    return reply.send({ user: request.user });
-  });
+app.get('/me', async (request, reply) => {
+  const token = tokenFrom(request);
 
-  app.post('/logout', async (request, reply) => {
-    const token = tokenFrom(request);
-    if (!token) return reply.status(401).send({ error: 'Unauthorized' });
-    await app.authService.logout(token);
-    return reply.send({ success: true });
+  if (!token) {
+    return reply.status(401).send({
+      error: 'Unauthorized',
+    });
+  }
+
+  const user = await app.authService.authenticate(token);
+
+  if (!user) {
+    return reply.status(401).send({
+      error: 'Unauthorized',
+    });
+  }
+
+  return reply.send({
+    user,
   });
+});
+
+app.post('/logout', async (request, reply) => {
+  const token = tokenFrom(request);
+
+  if (!token) {
+    return reply.status(401).send({
+      error: 'Unauthorized',
+    });
+  }
+
+  await app.authService.logout(token);
+
+  return reply.send({
+    success: true,
+  });
+});
 
   app.post('/refresh', async (request, reply) => {
     const token = tokenFrom(request);

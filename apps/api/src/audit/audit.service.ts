@@ -1,7 +1,9 @@
 import type { Pool } from 'pg';
 
 import type {
+  AuditEvent,
   AuditEventInput,
+  AuditEventListResponse,
   AuditEventQuery,
 } from './audit.types.js';
 
@@ -34,75 +36,95 @@ export class AuditService {
     );
   }
 
-  async list(input: AuditEventQuery) {
-    const limit = Math.min(
-      Math.max(input.limit ?? 50, 1),
-      100,
-    );
+async list(
+  input: AuditEventQuery,
+): Promise<AuditEventListResponse> {
+  const conditions = ['tenant_id = $1'];
+  const values: unknown[] = [input.tenantId];
 
-    const offset = Math.max(input.offset ?? 0, 0);
+  const addFilter = (
+    column: string,
+    value: string | undefined,
+  ): void => {
+    if (value === undefined) {
+      return;
+    }
 
-    const conditions = ['tenant_id = $1'];
-    const values: unknown[] = [input.tenantId];
+    values.push(value);
+    conditions.push(`${column} = $${values.length}`);
+  };
 
-    const addFilter = (
-      column: string,
-      value: string | undefined,
-    ) => {
-      if (value === undefined) {
-        return;
-      }
+  addFilter('action', input.action);
+  addFilter('resource_type', input.resourceType);
+  addFilter('resource_id', input.resourceId);
+  addFilter('user_id', input.userId);
 
-      values.push(value);
-      conditions.push(
-        `${column} = $${values.length}`,
-      );
-    };
+  values.push(input.limit);
+  const limitParam = values.length;
 
-    addFilter('action', input.action);
-    addFilter(
-      'resource_type',
-      input.resourceType,
-    );
-    addFilter(
-      'resource_id',
-      input.resourceId,
-    );
-    addFilter('user_id', input.userId);
+  values.push(input.offset);
+  const offsetParam = values.length;
 
-    values.push(limit);
-    const limitParam = values.length;
+  const result = await this.pool.query<AuditEvent>(
+    `
+      SELECT
+        id,
+        tenant_id,
+        user_id,
+        project_id,
+        action,
+        resource_type,
+        resource_id,
+        metadata,
+        created_at
+      FROM audit_events
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY created_at DESC, id DESC
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
+    `,
+    values,
+  );
 
-    values.push(offset);
-    const offsetParam = values.length;
+  return {
+    items: result.rows,
+    pagination: {
+      limit: input.limit,
+      offset: input.offset,
+    },
+  };
+}
 
-    const result = await this.pool.query(
-      `
-        SELECT
-          id,
-          tenant_id,
-          user_id,
-          project_id,
-          action,
-          resource_type,
-          resource_id,
-          metadata,
-          created_at
-        FROM audit_events
-        WHERE ${conditions.join(' AND ')}
-        ORDER BY created_at DESC, id DESC
-        LIMIT $${limitParam}
-        OFFSET $${offsetParam}
-      `,
-      values,
-    );
+async export(
+  input: AuditEventQuery,
+): Promise<AuditEventListResponse> {
+  return this.list(input);
+}
 
-    return {
-      items: result.rows,
-      pagination: {
-        limit,
-        offset,
-      },
-    };
-  }
+async getById(
+  tenantId: string,
+  id: string,
+): Promise<AuditEvent | null> {
+  const result = await this.pool.query<AuditEvent>(
+    `
+      SELECT
+        id,
+        tenant_id,
+        user_id,
+        project_id,
+        action,
+        resource_type,
+        resource_id,
+        metadata,
+        created_at
+      FROM audit_events
+      WHERE id = $1
+        AND tenant_id = $2
+      LIMIT 1
+    `,
+    [id, tenantId],
+  );
+
+  return result.rows[0] ?? null;
+}
 }

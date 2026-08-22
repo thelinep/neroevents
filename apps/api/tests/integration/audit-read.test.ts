@@ -42,7 +42,7 @@ interface AuditRow {
   resource_type: string | null;
   resource_id: string | null;
   metadata: Record<string, unknown>;
-  created_at: string;
+  created_at: Date;
 }
 
 interface AuditResponse {
@@ -561,92 +561,223 @@ it('allows ADMIN to read audit events', async () => {
     );
   });
 
-  it('caps limit at 100', async () => {
-    const session = await createSession(
-      'audit-read-limit',
-    );
+  describe('M26.7 strict query contract', () => {
+    it('rejects limit above 100 with 400', async () => {
+      const session = await createSession('audit-read-strict-limit-high');
+      const result = await readAudit(session, '?limit=101');
 
-    const result = await readAudit(
-      session,
-      '?limit=150',
-    );
-
-    expect(result.statusCode).toBe(200);
-
-    const body = result.body as AuditResponse;
-
-    expect(body.pagination.limit).toBe(100);
-    expect(body.items.length).toBeLessThanOrEqual(100);
-  });
-
-  it('normalizes a negative offset to 0', async () => {
-    const session = await createSession(
-      'audit-read-negative-offset',
-    );
-
-    const result = await readAudit(
-      session,
-      '?limit=2&offset=-50',
-    );
-
-    expect(result.statusCode).toBe(200);
-
-    const body = result.body as AuditResponse;
-
-    expect(body.pagination).toEqual({
-      limit: 2,
-      offset: 0,
-    });
-  });
-
-  it('ignores an injected tenantId and uses the request tenant', async () => {
-    const sessionA = await createSession(
-      'audit-read-injected-tenant-a',
-    );
-    const sessionB = await createSession(
-      'audit-read-injected-tenant-b',
-    );
-
-    await seedAuditEvent({
-      tenantId: sessionA.tenant.id,
-      userId: sessionA.user.id,
-      action: 'tenant-a:visible',
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
     });
 
-    await seedAuditEvent({
-      tenantId: sessionB.tenant.id,
-      userId: sessionB.user.id,
-      action: 'tenant-b:hidden',
+    it('rejects limit below 1 with 400', async () => {
+      const session = await createSession('audit-read-strict-limit-low');
+      const result = await readAudit(session, '?limit=0');
+
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
     });
 
-    const result = await readAudit(
-      sessionA,
-      `?tenantId=${encodeURIComponent(
-        sessionB.tenant.id,
-      )}`,
-    );
+    it('rejects non-integer limit with 400', async () => {
+      const session = await createSession(
+        'audit-read-strict-limit-fraction',
+      );
+      const result = await readAudit(session, '?limit=1.5');
 
-    expect(result.statusCode).toBe(200);
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
+    });
 
-    const body = result.body as AuditResponse;
+    it('rejects negative offset with 400', async () => {
+      const session = await createSession(
+        'audit-read-strict-offset-negative',
+      );
+      const result = await readAudit(session, '?offset=-1');
 
-    expect(
-      body.items.some(
-        (item) => item.action === 'tenant-a:visible',
-      ),
-    ).toBe(true);
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
+    });
 
-    expect(
-      body.items.some(
-        (item) => item.action === 'tenant-b:hidden',
-      ),
-    ).toBe(false);
+    it('rejects non-integer offset with 400', async () => {
+      const session = await createSession(
+        'audit-read-strict-offset-fraction',
+      );
+      const result = await readAudit(session, '?offset=1.5');
 
-    expect(
-      body.items.every(
-        (item) =>
-          item.tenant_id === sessionA.tenant.id,
-      ),
-    ).toBe(true);
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
+    });
+
+    it('rejects unknown query parameters with 400', async () => {
+      const session = await createSession(
+        'audit-read-strict-unknown-query',
+      );
+      const result = await readAudit(
+        session,
+        '?unexpected=value',
+      );
+
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
+    });
+
+    it('rejects tenantId query injection with 400', async () => {
+      const session = await createSession(
+        'audit-read-strict-tenant-query',
+      );
+      const result = await readAudit(
+        session,
+        '?tenantId=another-tenant',
+      );
+
+      expect(result.statusCode).toBe(400);
+      expect(result.body).toEqual({
+        error: expect.any(String),
+      });
+    });
+
+    it('returns deterministic empty result', async () => {
+      const session = await createSession(
+        'audit-read-empty',
+      );
+
+      const result = await readAudit(
+        session,
+        '?action=definitely-not-present',
+      );
+
+      expect(result.statusCode).toBe(200);
+      expect(result.body).toEqual({
+        items: [],
+        pagination: {
+          limit: 50,
+          offset: 0,
+        },
+      });
+    });
+
+    it('returns the pagination contract', async () => {
+      const session = await createSession(
+        'audit-read-pagination-contract',
+      );
+
+      const result = await readAudit(
+        session,
+        '?limit=7&offset=3',
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = result.body as AuditResponse;
+
+      expect(Object.keys(body.pagination).sort()).toEqual([
+        'limit',
+        'offset',
+      ]);
+
+      expect(body.pagination).toEqual({
+        limit: 7,
+        offset: 3,
+      });
+
+      expect(typeof body.pagination.limit).toBe(
+        'number',
+      );
+      expect(typeof body.pagination.offset).toBe(
+        'number',
+      );
+    });
+
+    it('preserves stable ordering', async () => {
+      const session = await createSession(
+        'audit-read-ordering',
+      );
+
+      await seedAuditEvent({
+        tenantId: session.tenant.id,
+        action: 'ordering:first',
+      });
+
+      await seedAuditEvent({
+        tenantId: session.tenant.id,
+        action: 'ordering:second',
+      });
+
+      const result = await readAudit(session);
+
+      expect(result.statusCode).toBe(200);
+
+      const body = result.body as AuditResponse;
+
+      for (
+        let index = 1;
+        index < body.items.length;
+        index += 1
+      ) {
+        const previous = body.items[index - 1];
+        const current = body.items[index];
+
+        const previousTime = new Date(
+          previous.created_at,
+        ).getTime();
+        const currentTime = new Date(
+          current.created_at,
+        ).getTime();
+
+        expect(previousTime).toBeGreaterThanOrEqual(
+          currentTime,
+        );
+
+        if (previousTime === currentTime) {
+          expect(previous.id > current.id).toBe(true);
+        }
+      }
+    });
+
+    it('returns the documented response shape', async () => {
+      const session = await createSession(
+        'audit-read-response-shape',
+      );
+
+      const result = await readAudit(
+        session,
+        '?action=response-shape-not-present',
+      );
+
+      expect(result.statusCode).toBe(200);
+
+      const body = result.body as AuditResponse;
+
+      expect(Object.keys(body).sort()).toEqual([
+        'items',
+        'pagination',
+      ]);
+
+      expect(Array.isArray(body.items)).toBe(true);
+
+      expect(Object.keys(body.pagination).sort()).toEqual([
+        'limit',
+        'offset',
+      ]);
+
+      expect(typeof body.pagination.limit).toBe(
+        'number',
+      );
+      expect(typeof body.pagination.offset).toBe(
+        'number',
+      );
+    });
   });
 });
