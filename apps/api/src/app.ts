@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyServerOptions } from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import multipart from '@fastify/multipart';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,8 +13,11 @@ import agentsRoutes from './routes/agents.js';
 import filesRoutes from './routes/files.js';
 import auditRoutes from './routes/audit.js';
 
-export function buildApp() {
-  const app = Fastify({ logger: true });
+export function buildApp(options: FastifyServerOptions = {},) {
+    const app = Fastify({
+    logger: true,
+    ...options,
+  });
 
  app.register(fastifyStatic, {
     root: path.resolve(process.cwd(), '../web/dist'),

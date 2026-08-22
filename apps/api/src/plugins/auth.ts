@@ -37,17 +37,19 @@ export default fp(async (app: FastifyInstance) => {
 app.decorateRequest('tenant');
 
   app.addHook('preHandler', async (request, reply) => {
-    const publicPaths = [
-      '/api/auth/login',
-      '/api/auth/register',
-      '/api/auth/refresh',
-      '/health',
-      '/ready',
+    const authManagedPaths = [
+     '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/refresh',
+    '/api/auth/me',
+    '/api/auth/logout',
+    '/health',
+    '/ready',
     ];
 
     // Public API endpoints.
     if (
-      publicPaths.some(
+      authManagedPaths.some(
         (path) =>
           request.url === path ||
           request.url.startsWith(`${path}?`),

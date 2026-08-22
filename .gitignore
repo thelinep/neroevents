@@ -5,10 +5,8 @@ playwright-report/
 test-results/
 .DS_Store
 *.log
-.env
-.env.*
-!.env.example
-!.env.test.example
+
+
 *.pem
 *.key
 *.crt
@@ -17,3 +15,25 @@ secrets/
 # Local workspace state
 .nevo/
 workspaces/
+
+
+
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# TLS/private credentials
+/infrastructure/tls/*.pem
+/infrastructure/tls/*.key
+
+# Secret material
+/infrastructure/secrets/*
+!/infrastructure/secrets/README.md
+
+# Production database backups
+/infrastructure/backups/
+*.dump
+*.sql

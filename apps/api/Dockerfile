@@ -19,35 +19,31 @@ COPY packages/contracts packages/contracts
 COPY packages/database packages/database
 
 RUN pnpm --filter @nevo/auth build
+
 RUN pnpm --filter nevo-builder-backend build
+
+
+FROM build AS production-deps
+
+RUN pnpm deploy \
+    --filter nevo-builder-backend \
+    --prod \
+    /prod/api
 
 
 FROM node:22-alpine AS runtime
 
 WORKDIR /app
 
-RUN corepack enable
-
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/pnpm-lock.yaml ./pnpm-lock.yaml
-COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
-
-COPY --from=build /app/apps/api/package.json ./apps/api/package.json
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-
-COPY --from=build /app/packages/auth/package.json ./packages/auth/package.json
-COPY --from=build /app/packages/auth/dist ./packages/auth/dist
-
-COPY --from=build /app/packages/contracts/package.json ./packages/contracts/package.json
-COPY --from=build /app/packages/database ./packages/database
-
-RUN pnpm install --frozen-lockfile --prod
-
-WORKDIR /app/apps/api
-
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
+
+COPY --from=build /app/apps/api/dist ./dist
+
+COPY --from=production-deps /prod/api/node_modules ./node_modules
+
+COPY --from=production-deps /prod/api/package.json ./package.json
 
 EXPOSE 3000
 
